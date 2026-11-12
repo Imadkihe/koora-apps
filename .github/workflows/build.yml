@@ -1,0 +1,44 @@
+name: Build APKs
+on: [push, workflow_dispatch]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Build 3 APKs
+        run: |
+          unzip -o koora_live_3_apps_source.zip -d src
+          flutter create --org com.kooralive --project-name koora_admin app1
+          cp -r src/1_koora_admin_app/lib/* app1/lib/
+          sed -i 's/android:label="koora_admin"/android:label="كورة لايف - الأدمن"/' app1/android/app/src/main/AndroidManifest.xml
+          cd app1 && flutter build apk --release && cd ..
+          cp app1/build/app/outputs/flutter-apk/app-release.apk Koora_1_Admin.apk
+
+          flutter create --org com.kooralive --project-name koora_user app2
+          cp -r src/2_koora_user_app/lib/* app2/lib/
+          sed -i 's/android:label="koora_user"/android:label="كورة لايف"/' app2/android/app/src/main/AndroidManifest.xml
+          sed -i 's|<application|<queries><intent><action android:name="android.intent.action.VIEW"/><data android:scheme="kooraplayer"/></intent></queries><application|' app2/android/app/src/main/AndroidManifest.xml
+          cd app2 && flutter pub add url_launcher && flutter build apk --release && cd ..
+          cp app2/build/app/outputs/flutter-apk/app-release.apk Koora_2_User_Main.apk
+
+          flutter create --org com.kooralive --project-name koora_player app3
+          cp -r src/3_koora_external_player_app/lib/* app3/lib/
+          sed -i 's/android:label="koora_player"/android:label="مشغل كورة لايف"/' app3/android/app/src/main/AndroidManifest.xml
+          sed -i 's|</activity>|<intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="kooraplayer" android:host="play"/></intent-filter></activity>|' app3/android/app/src/main/AndroidManifest.xml
+          cd app3 && flutter build apk --release && cd ..
+          cp app3/build/app/outputs/flutter-apk/app-release.apk Koora_3_External_Player.apk
+      - name: Publish APKs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete v1.0 -y || true
+          gh release create v1.0 Koora_1_Admin.apk Koora_2_User_Main.apk Koora_3_External_Player.apk --title "Koora Live 3 APKs" --notes "Ready to install"
